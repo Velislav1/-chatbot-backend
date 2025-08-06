@@ -1,0 +1,20 @@
+{
+  "name": "velox-gpt-starter",
+  "version": "1.0.0",
+  "description": "Simple GPT-powered bot",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "axios": "^1.11.0",
+    "body-parser": "^1.20.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^4.21.2",
+    "mongoose": "^8.17.0",
+    "multer": "^2.0.2",
+    "openai": "^4.104.0",
+    "pdf-parse": "^1.1.1"
+  }
+}

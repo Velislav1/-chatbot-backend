@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Prime Insurance Chat</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(to right, #dfe9f3, #ffffff);
+      padding: 30px;
+      transition: background 0.3s;
+    }
+
+    .dark-mode {
+      background: #1e1e1e;
+      color: white;
+    }
+
+    #chatbox {
+      max-width: 800px;
+      margin: 0 auto;
+      background: #fff;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 6px 16px rgba(0,0,0,0.1);
+      transition: background 0.3s, color 0.3s;
+    }
+
+    .dark-mode #chatbox {
+      background: #2a2a2a;
+      color: white;
+    }
+
+    #messages {
+      height: 400px;
+      overflow-y: auto;
+      margin-bottom: 15px;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      background-color: #f9f9f9;
+    }
+
+    .dark-mode #messages {
+      background-color: #1c1c1c;
+      border: 1px solid #444;
+    }
+
+    .user, .bot {
+      display: flex;
+      margin-bottom: 10px;
+      align-items: flex-start;
+    }
+
+    .user {
+      justify-content: flex-end;
+    }
+
+    .bot {
+      justify-content: flex-start;
+    }
+
+    .bubble {
+      padding: 10px;
+      border-radius: 12px;
+      max-width: 70%;
+    }
+
+    .user .bubble {
+      background-color: #d1ecf1;
+      color: #0c5460;
+    }
+
+    .bot .bubble {
+      background-color: #fff3cd;
+      color: #856404;
+    }
+
+    .dark-mode .user .bubble {
+      background-color: #005f73;
+      color: #e0fbfc;
+    }
+
+    .dark-mode .bot .bubble {
+      background-color: #333;
+      color: #fff;
+    }
+
+    .avatar {
+      width: 32px;
+      height: 32px;
+      margin-right: 10px;
+    }
+
+    textarea {
+      width: 100%;
+      padding: 10px;
+      font-size: 16px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+    }
+
+    .controls {
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      background-color: #3498db;
+      color: white;
+    }
+
+    .calendar-btn {
+      background-color: #27ae60;
+    }
+
+    .typing {
+      font-style: italic;
+      color: #aaa;
+      animation: blink 1s infinite;
+    }
+
+    @keyframes blink {
+      0% { opacity: 1; }
+      50% { opacity: 0.3; }
+      100% { opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  <div id="chatbox">
+    <h2>🤖 Prime Insurance Agent</h2>
+    <div id="messages"></div>
+    <textarea id="question" placeholder="Type your message..."></textarea>
+    <div class="controls">
+      <button onclick="clearChat()">Clear Chat</button>
+      <button onclick="toggleDarkMode()">Toggle Dark Mode</button>
+    </div>
+  </div>
+
+  <script>
+    const SERVER_URL = "https://6bb1dd68a37b.ngrok-free.app";
+    const sessionId = localStorage.getItem("sessionId") || crypto.randomUUID();
+    localStorage.setItem("sessionId", sessionId);
+    const chatHistory = [];
+    const messagesDiv = document.getElementById("messages");
+
+    function updateChat() {
+      messagesDiv.innerHTML = chatHistory.map(msg => {
+        const avatar = msg.role === 'user'
+          ? ''
+          : '<img src="https://img.icons8.com/color/48/bot.png" class="avatar"/>';
+        return `<div class="${msg.role}">${avatar}<div class="bubble">${msg.content}</div></div>`;
+      }).join("");
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    async function sendMessage(message) {
+      if (!message) return;
+
+      chatHistory.push({ role: "user", content: message });
+      updateChat();
+
+      chatHistory.push({ role: "bot", content: '<span class="typing">Typing...</span>' });
+      updateChat();
+
+      try {
+        const res = await fetch(`${SERVER_URL}/chat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question: message, sessionId })
+        });
+        const data = await res.json();
+        chatHistory.pop();
+        chatHistory.push({ role: "bot", content: data.message || "⚠️ No response" });
+        updateChat();
+      } catch (err) {
+        chatHistory.pop();
+        chatHistory.push({ role: "bot", content: "❌ Error: " + err.message });
+        updateChat();
+      }
+    }
+
+    function clearChat() {
+      chatHistory.length = 0;
+      welcomeMessages();
+    }
+
+    function toggleDarkMode() {
+      document.body.classList.toggle("dark-mode");
+    }
+
+    function welcomeMessages() {
+      chatHistory.push({ role: "bot", content: "👋 Hi! I'm Prime Insurance Agent. How can I help you today?" });
+      chatHistory.push({ role: "bot", content: "📄 <button onclick='alert(\"Show PDF Upload Section\")'>Upload a PDF file</button>" });
+      chatHistory.push({ role: "bot", content: "📅 <a href='https://calendly.com/viliokaized' target='_blank'><button class='calendar-btn'>Book a meeting</button></a>" });
+      chatHistory.push({ role: "bot", content: "🤖 You can also ask questions or become a client right here." });
+      updateChat();
+    }
+
+    welcomeMessages();
+
+    document.getElementById("question").addEventListener("keypress", function (e) {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        const msg = this.value.trim();
+        this.value = "";
+        sendMessage(msg);
+      }
+    });
+  </script>
+</body>
+</html>
+
+

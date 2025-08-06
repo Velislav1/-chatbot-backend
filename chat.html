@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Prime Insurance Agent</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(to right, #dfe9f3, #ffffff);
+      padding: 30px;
+      transition: background 0.3s;
+    }
+
+    .dark-mode {
+      background: #1e1e1e;
+      color: white;
+    }
+
+    #chatbox {
+      max-width: 400px;
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #fff;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+      transition: background 0.3s, color 0.3s;
+      z-index: 9999;
+    }
+
+    .dark-mode #chatbox {
+      background: #2a2a2a;
+      color: white;
+    }
+
+    #messages {
+      height: 300px;
+      overflow-y: auto;
+      margin-bottom: 10px;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      background-color: #f9f9f9;
+    }
+
+    .dark-mode #messages {
+      background-color: #1c1c1c;
+      border: 1px solid #444;
+    }
+
+    .user, .bot {
+      display: flex;
+      margin-bottom: 10px;
+      align-items: flex-start;
+    }
+
+    .user {
+      justify-content: flex-end;
+    }
+
+    .bot {
+      justify-content: flex-start;
+    }
+
+    .bubble {
+      padding: 10px;
+      border-radius: 12px;
+      max-width: 70%;
+    }
+
+    .user .bubble {
+      background-color: #d1ecf1;
+      color: #0c5460;
+    }
+
+    .bot .bubble {
+      background-color: #fff3cd;
+      color: #856404;
+    }
+
+    .dark-mode .user .bubble {
+      background-color: #005f73;
+      color: #e0fbfc;
+    }
+
+    .dark-mode .bot .bubble {
+      background-color: #333;
+      color: #fff;
+    }
+
+    .avatar {
+      width: 32px;
+      height: 32px;
+      margin-right: 10px;
+    }
+
+    textarea {
+      width: 100%;
+      padding: 10px;
+      font-size: 16px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+    }
+
+    .controls {
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      background-color: #3498db;
+      color: white;
+    }
+
+    .calendar-btn {
+      background-color: #27ae60;
+    }
+
+    .typing {
+      font-style: italic;
+      color: #aaa;
+      animation: blink 1s infinite;
+    }
+
+    @keyframes blink {
+      0% { opacity: 1; }
+      50% { opacity: 0.3; }
+      100% { opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="chatbox">
+    <h3>🤖 Prime Insurance Agent</h3>
+    <div id="messages"></div>
+    <textarea id="question" placeholder="Type your message..."></textarea>
+    <div class="controls">
+      <button onclick="clearChat()">Clear</button>
+      <button onclick="toggleDarkMode()">Dark Mode</button>
+    </div>
+  </div>
+
+  <!-- ✅ Скриптът е преместен най-долу -->
+  <script src="script.js" defer></script>
+
+    

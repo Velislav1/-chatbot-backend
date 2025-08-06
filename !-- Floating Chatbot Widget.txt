@@ -1,0 +1,70 @@
+<!-- Floating Chatbot Widget -->
+<style>
+  #chatbot-widget {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 9999;
+  }
+
+  #chatbot-toggle {
+    background-color: #7c3aed;
+    color: white;
+    border: none;
+    padding: 14px 16px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 20px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    animation: bounce 1.5s infinite;
+  }
+
+  #chatbot-frame {
+    display: none;
+    position: fixed;
+    bottom: 80px;
+    right: 24px;
+    width: 400px;
+    height: 600px;
+    border: none;
+    border-radius: 20px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    z-index: 9999;
+    animation: fadeIn 0.5s ease-in-out;
+  }
+
+  @keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+  }
+</style>
+
+<div id="chatbot-widget">
+  <button id="chatbot-toggle">💬</button>
+  <iframe
+    id="chatbot-frame"
+    src="https://yes-7syp5ui5n-velislavs-projects-eb5e3355.vercel.app"
+  ></iframe>
+</div>
+
+<script>
+  const toggleBtn = document.getElementById("chatbot-toggle");
+  const iframe = document.getElementById("chatbot-frame");
+
+  toggleBtn.addEventListener("click", () => {
+    iframe.style.display = iframe.style.display === "none" ? "block" : "none";
+  });
+
+  // Покажи бутона след 5 секунди
+  window.addEventListener("load", () => {
+    document.getElementById("chatbot-widget").style.display = "none";
+    setTimeout(() => {
+      document.getElementById("chatbot-widget").style.display = "block";
+    }, 5000);
+  });
+</script>

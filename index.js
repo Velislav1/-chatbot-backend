@@ -25,8 +25,8 @@ mongoose.connect(process.env.MONGODB_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true
 })
-.then(() => console.log('✅ MongoDB connected'))
-.catch(err => console.error('❌ MongoDB connection error:', err));
+  .then(() => console.log('✅ MongoDB connected'))
+  .catch(err => console.error('❌ MongoDB connection error:', err));
 
 console.log('MONGODB_URI:', process.env.MONGODB_URI);
 
@@ -115,7 +115,7 @@ async function answerFromKnowledgeBase(question, fullName, email, phone) {
   }
 
   // 🧠 Стандартна GPT логика, ако липсват данни
-const gptPrompt = `
+  const gptPrompt = `
 You are Prime, a smart and friendly virtual insurance agent.
 Your job is to help users, collect their contact info (full name, email, phone, type of insurance), and answer questions clearly.
 
@@ -148,27 +148,26 @@ Answer:`;
   return `${response.choices[0].message.content.trim()}\n\n🙏 Thank you for your question! 💬 How else can I help you today?`;
 }
 app.post('/chat', async (req, res) => {
-  const { question, sessionId } = req.body;
+  const { q: question, sessionId } = req.body;
+
   if (!question || !sessionId)
     return res.status(400).json({ messages: [{ type: 'bot', content: "❌ Missing question or sessionId" }] });
 
   if (!sessionStore[sessionId]) {
- if (!sessionStore[sessionId]) {
-  sessionStore[sessionId] = {
-    step: 'collect_name',
-    booked: false,
-    messages: [],
-    data: {
-      name: '',
-      email: '',
-      phone: '',
-      insuranceType: ''
-    }
-  };
-}
+    sessionStore[sessionId] = {
+      step: 'collect_name',
+      booked: false,
+      messages: [],
+      data: {
+        name: '',
+        email: '',
+        phone: '',
+        type: ''
+      }
+    };
+  }
 
-}
-  const { fullName, email, phone } = leads;
+  const leads = sessionStore[sessionId];
 
   // ✅ Booking confirmed
   if (leads.booked) {
@@ -181,26 +180,27 @@ app.post('/chat', async (req, res) => {
     });
   }
 
-  extractLeadData(question, leads);
-leads.messages.push({ role: 'user', content: question });
+  extractLeadData(question, leads.data);
+  leads.messages.push({ role: 'user', content: question });
 
-  if (leads.lastAsked && leads[leads.lastAsked]) delete leads.lastAsked;
-const missingField = getNextMissingField(leads);
-if (!missingField) {
-  const answer = await answerFromKnowledgeBase(
-    question,
-    leads.data.name,
-    leads.data.email,
-    leads.data.phone
-  );
+  if (leads.lastAsked && leads.data[leads.lastAsked]) delete leads.lastAsked;
 
-  return res.json({
-    messages: [
-      { type: 'bot', content: answer }
-    ]
-  });
-}
+  const missingField = getNextMissingField(leads.data);
 
+  if (!missingField) {
+    const answer = await answerFromKnowledgeBase(
+      question,
+      leads.data.name,
+      leads.data.email,
+      leads.data.phone
+    );
+
+    return res.json({
+      messages: [
+        { type: 'bot', content: answer }
+      ]
+    });
+  }
 
   // 📅 Booking intent
   if (/book|meeting|schedule|appointment/i.test(question.toLowerCase())) {
@@ -215,18 +215,14 @@ if (!missingField) {
     });
   }
 
-  // 🔍 Проверка дали липсва някое от нужните полета
-function needsMoreInfo(leads) {
-  return !(leads.fullName && leads.email && leads.phone && leads.insuranceType);
-}
+  let justSent = false;
 
-let justSent = false;
-if (!leads.sent && !needsMoreInfo(leads)) {
-  try {
-    await sendLeadsToMake(leads);
+  if (!leads.sent && !needsMoreInfo(leads.data)) {
+    try {
+      await sendLeadsToMake(leads.data);
       leads.sent = true;
       justSent = true;
-      await Lead.create(leads);
+      await Lead.create(leads.data);
       console.log('✅ Lead saved to MongoDB');
     } catch (err) {
       return res.json({
@@ -239,11 +235,11 @@ if (!leads.sent && !needsMoreInfo(leads)) {
 
   let gptResponse = '';
 
-  if (leads.sent && !needsMoreInfo(leads)) {
+  if (leads.sent && !needsMoreInfo(leads.data)) {
     const kbAnswer = await answerFromKnowledgeBase(question);
     gptResponse = kbAnswer || "✅ You're all set! Feel free to ask more questions.";
-  } else if (!leads.sent && needsMoreInfo(leads)) {
-    const missingField = getNextMissingField(leads);
+  } else if (!leads.sent && needsMoreInfo(leads.data)) {
+    const missingField = getNextMissingField(leads.data);
     leads.lastAsked = missingField;
     gptResponse = getFieldQuestion(missingField);
   } else if (justSent) {
@@ -252,55 +248,47 @@ if (!leads.sent && !needsMoreInfo(leads)) {
     const gptPrompt = 'You are an insurance assistant. Be friendly. Collect: full name, email, phone, and insurance type (auto, health, life, home). Ask one question at a time. Use short, polite answers. And answer user questions.';
 
     const chat = await openai.chat.completions.create({
-const randomEnding = endings[Math.floor(Math.random() * endings.length)];
-
-if (!gptResponse.toLowerCase().includes("how else can i help") &&
-    !gptResponse.toLowerCase().includes("what else can i do for you")) {
-  gptResponse += `\n\n${randomEnding}`;
-}
-
       model: 'gpt-4',
       max_tokens: 150,
       temperature: 0.7,
       messages: [
-  { role: 'system', content: gptPrompt },
-  leads.messages.push({ role: 'assistant', content: gptResponse });
-
-]
-
+        { role: 'system', content: gptPrompt },
+        { role: 'user', content: question }
+      ]
     });
 
-  gptResponse = chat.choices[0].message.content.trim();
-if (!leads.messages) leads.messages = [];
-leads.messages.push({ role: 'user', content: question });
+    gptResponse = chat.choices[0].message.content.trim();
 
-const endings = [
-  "💬 How else can I assist you today?",
-  "🙋 Feel free to ask anything else!",
-  "🧠 Would you like to know something more?",
-  "🤖 I'm here to help. What's next?"
-];
+    const endings = [
+      "💬 How else can I assist you today?",
+      "🙏 Feel free to ask anything else!",
+      "🎀 Would you like to know something more?",
+      "🤖 I'm here to help. What's next?"
+    ];
 
+    if (
+      !gptResponse.toLowerCase().includes("how else can i help") &&
+      !gptResponse.toLowerCase().includes("what else can i do for you")
+    ) {
+      const randomEnding = endings[Math.floor(Math.random() * endings.length)];
+      gptResponse += `\n\n${randomEnding}`;
+    }
+  }
 
-const randomEnding = endings[Math.floor(Math.random() * endings.length)];
-console.log(randomEnding);
+  leads.messages.push({ role: 'assistant', content: gptResponse });
 
-if (
-  !gptResponse.toLowerCase().includes("how else can i help") &&
-  !gptResponse.toLowerCase().includes("what else can i do for you")
-) {
-  gptResponse += `\n\n${randomEnding}`;
-}
-
-return res.json({
-  messages: [
-    { type: 'bot', content: gptResponse }
-  ]
+  return res.json({
+    messages: [
+      { type: 'bot', content: gptResponse }
+    ]
+  });
 });
 
- 
 
+
+  
 app.post('/calendly-booked', (req, res) => {
+
   const { sessionId } = req.body;
   if (sessionId && sessionStore[sessionId]) {
     sessionStore[sessionId].booked = true;
@@ -313,4 +301,3 @@ app.post('/calendly-booked', (req, res) => {
 app.listen(3000, () => {
   console.log('🚀 GPT bot is listening on http://localhost:3000');
 });
-

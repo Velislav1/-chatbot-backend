@@ -115,28 +115,29 @@ async function answerFromKnowledgeBase(question, fullName, email, phone) {
   }
 
   // 🧠 Стандартна GPT логика, ако липсват данни
- const gptPrompt = `
-You are Prime, a smart and friendly virtual insurance agent. 
+const gptPrompt = `
+You are Prime, a smart and friendly virtual insurance agent.
 Your job is to help users, collect their contact info (full name, email, phone, type of insurance), and answer questions clearly.
 
 Speak like a real human: short sentences, warm tone, not robotic.
 Always thank the user after each message.
 Only ask one question at a time.
-If the user already gave some info, don't ask again.
+If the user already gave some info, don’t ask again.
 
-If you don't know something, politely say so.
-When answering, be kind and professional — like a real insurance expert.
+If you don’t know something, politely say so.
+When answering, be kind and professional – like a real insurance expert.
 
-Always end your response with: 
+Always end your response with:
 💬 How else can I help you today?
 
 Keep responses under 2–3 sentences.
-`;
 
-Knowledge Base:/${knowledgeBase}
-"""
+Knowledge Base:
+${knowledgeBase}
+
 Question: ${question}
-Answer:`.trim();
+Answer:`;
+
 
   const response = await openai.chat.completions.create({
     model: 'gpt-4',
@@ -214,10 +215,15 @@ if (!missingField) {
     });
   }
 
-  let justSent = false;
-  if (!leads.sent && !needsMoreInfo(leads)) {
-    try {
-      await sendLeadsToMake(leads);
+  // 🔍 Проверка дали липсва някое от нужните полета
+function needsMoreInfo(leads) {
+  return !(leads.fullName && leads.email && leads.phone && leads.insuranceType);
+}
+
+let justSent = false;
+if (!leads.sent && !needsMoreInfo(leads)) {
+  try {
+    await sendLeadsToMake(leads);
       leads.sent = true;
       justSent = true;
       await Lead.create(leads);

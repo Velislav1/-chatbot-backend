@@ -276,12 +276,14 @@ leads.messages.push({ role: 'user', content: question });
 
 const endings = [
   "💬 How else can I assist you today?",
-  "🙏 Feel free to ask anything else!",
-  "📘 Would you like to know something more?",
-  "🤖 I'm here to help. What’s next?"
+  "🙋 Feel free to ask anything else!",
+  "🧠 Would you like to know something more?",
+  "🤖 I'm here to help. What's next?"
 ];
 
+
 const randomEnding = endings[Math.floor(Math.random() * endings.length)];
+console.log(randomEnding);
 
 if (
   !gptResponse.toLowerCase().includes("how else can i help") &&

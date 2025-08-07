@@ -91,6 +91,8 @@ async function sendLeadsToMake(leads) {
   }
 }
 
+loadKnowledgeBase();
+
 async function loadKnowledgeBase() {
   try {
     const file1 = fs.readFileSync('./documents for base/first.pdf');
@@ -104,7 +106,7 @@ async function loadKnowledgeBase() {
   }
 }
 
-loadKnowledgeBase();
+
 
 async function answerFromKnowledgeBase(question, fullName, email, phone) {
   // 🔒 Ако вече имаме всичко – не викай GPT, върни завършен отговор
@@ -131,9 +133,7 @@ Always end your response with:
 Keep responses under 2–3 sentences.
 `;
 
-Knowledge Base:
-""" 
-${knowledgeBase}
+Knowledge Base:/${knowledgeBase}
 """
 Question: ${question}
 Answer:`.trim();

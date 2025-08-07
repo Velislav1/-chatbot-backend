@@ -193,28 +193,37 @@
     }
 
     async function sendMessage(message) {
-      if (!message) return;
-      chatHistory.push({ role: "user", content: message });
-      updateChat();
-      chatHistory.push({ role: "bot", content: '<span class="typing">Typing...</span>' });
-      updateChat();
+  if (!message) return;
+  chatHistory.push({ role: "user", content: message });
+  updateChat();
 
-      try {
-        const res = await fetch(`${SERVER_URL}/chat`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ question: message, sessionId })
-        });
-        const data = await res.json();
-        chatHistory.pop();
-        chatHistory.push({ role: "bot", content: data.message || "⚠️ No response" });
-        updateChat();
-      } catch (err) {
-        chatHistory.pop();
-        chatHistory.push({ role: "bot", content: "❌ Error: " + err.message });
-        updateChat();
-      }
-    }
+  try {
+    const res = await fetch(`${SERVER_URL}/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question: message, sessionId })
+    });
+
+    const data = await res.json();
+    const delay = data.delay || 1200;
+
+    // Показваме typing...
+    chatHistory.push({ role: "bot", content: '<span class="typing">Typing...</span>' });
+    updateChat();
+
+    setTimeout(() => {
+      chatHistory.pop(); // махаме typing...
+      (data.messages || []).forEach(msg => {
+        chatHistory.push({ role: "bot", content: msg.content });
+      });
+      updateChat();
+    }, delay);
+  } catch (err) {
+    chatHistory.pop(); // махни typing, ако е там
+    chatHistory.push({ role: "bot", content: "❌ Error: " + err.message });
+    updateChat();
+  }
+}
 
     function clearChat() {
       chatHistory.length = 0;

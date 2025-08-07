@@ -109,12 +109,27 @@ loadKnowledgeBase();
 async function answerFromKnowledgeBase(question, fullName, email, phone) {
   // 🔒 Ако вече имаме всичко – не викай GPT, върни завършен отговор
   if (fullName && email && phone) {
-    return "✅ Thank you! You're all set. A licensed agent will contact you soon. You can also book a meeting or ask more questions here.";
+    return "✅ Thank you! You're all set. A licensed agent will contact you soon. You can also book a meeting or ask more questions here.\n\n💬 How else can I help you today?";
   }
 
   // 🧠 Стандартна GPT логика, ако липсват данни
-  const prompt = `You are a helpful assistant. Answer the user's question based only on the following insurance knowledge base.
-If the answer is not found in the text, say "I'm not sure about that – you may want to ask an agent."
+ const gptPrompt = `
+You are Prime, a smart and friendly virtual insurance agent. 
+Your job is to help users, collect their contact info (full name, email, phone, type of insurance), and answer questions clearly.
+
+Speak like a real human: short sentences, warm tone, not robotic.
+Always thank the user after each message.
+Only ask one question at a time.
+If the user already gave some info, don't ask again.
+
+If you don't know something, politely say so.
+When answering, be kind and professional — like a real insurance expert.
+
+Always end your response with: 
+💬 How else can I help you today?
+
+Keep responses under 2–3 sentences.
+`;
 
 Knowledge Base:
 """ 
@@ -128,27 +143,74 @@ Answer:`.trim();
     messages: [{ role: 'system', content: prompt }]
   });
 
-  return response.choices[0].message.content.trim();
+  // ✅ Добавяме благодарност + follow-up
+  return `${response.choices[0].message.content.trim()}\n\n🙏 Thank you for your question! 💬 How else can I help you today?`;
 }
 app.post('/chat', async (req, res) => {
- const { question, sessionId } = req.body;
-if (!question || !sessionId) return res.status(400).json({ message: "Missing question or sessionId" });
+  const { question, sessionId } = req.body;
+  if (!question || !sessionId)
+    return res.status(400).json({ messages: [{ type: 'bot', content: "❌ Missing question or sessionId" }] });
 
-if (!sessionStore[sessionId]) sessionStore[sessionId] = {};
-let leads = sessionStore[sessionId];
-const { fullName, email, phone } = leads;
+  if (!sessionStore[sessionId]) {
+ if (!sessionStore[sessionId]) {
+  sessionStore[sessionId] = {
+    step: 'collect_name',
+    booked: false,
+    messages: [],
+    data: {
+      name: '',
+      email: '',
+      phone: '',
+      insuranceType: ''
+    }
+  };
+}
 
+}
+  const { fullName, email, phone } = leads;
+
+  // ✅ Booking confirmed
   if (leads.booked) {
     delete leads.booked;
-    return res.json({ message: "✅ Your meeting has been booked! What else would you like to ask?" });
+    return res.json({
+      messages: [
+        { type: 'bot', content: "✅ Your meeting has been booked!" },
+        { type: 'bot', content: "💬 What else would you like to ask?" }
+      ]
+    });
   }
 
   extractLeadData(question, leads);
-  if (leads.lastAsked && leads[leads.lastAsked]) delete leads.lastAsked;
+leads.messages.push({ role: 'user', content: question });
 
+  if (leads.lastAsked && leads[leads.lastAsked]) delete leads.lastAsked;
+const missingField = getNextMissingField(leads);
+if (!missingField) {
+  const answer = await answerFromKnowledgeBase(
+    question,
+    leads.data.name,
+    leads.data.email,
+    leads.data.phone
+  );
+
+  return res.json({
+    messages: [
+      { type: 'bot', content: answer }
+    ]
+  });
+}
+
+
+  // 📅 Booking intent
   if (/book|meeting|schedule|appointment/i.test(question.toLowerCase())) {
     return res.json({
-      message: `📅 Schedule a meeting with a Prime Insurance Agent: <a href="${CALENDLY_LINK}" target="_blank">Book now</a>`
+      messages: [
+        {
+          type: 'bot',
+          content: `📅 Schedule a meeting with a Prime Insurance Agent: <a href="${CALENDLY_LINK}" target="_blank">Book now</a>`
+        },
+        { type: 'bot', content: "💬 Would you like help with anything else?" }
+      ]
     });
   }
 
@@ -161,11 +223,16 @@ const { fullName, email, phone } = leads;
       await Lead.create(leads);
       console.log('✅ Lead saved to MongoDB');
     } catch (err) {
-      return res.json({ message: '❌ Error sending to Make: ' + err.message });
+      return res.json({
+        messages: [
+          { type: 'bot', content: '❌ Error sending to Make: ' + err.message }
+        ]
+      });
     }
   }
 
   let gptResponse = '';
+
   if (leads.sent && !needsMoreInfo(leads)) {
     const kbAnswer = await answerFromKnowledgeBase(question);
     gptResponse = kbAnswer || "✅ You're all set! Feel free to ask more questions.";
@@ -179,27 +246,51 @@ const { fullName, email, phone } = leads;
     const gptPrompt = 'You are an insurance assistant. Be friendly. Collect: full name, email, phone, and insurance type (auto, health, life, home). Ask one question at a time. Use short, polite answers. And answer user questions.';
 
     const chat = await openai.chat.completions.create({
+const randomEnding = endings[Math.floor(Math.random() * endings.length)];
+
+if (!gptResponse.toLowerCase().includes("how else can i help") &&
+    !gptResponse.toLowerCase().includes("what else can i do for you")) {
+  gptResponse += `\n\n${randomEnding}`;
+}
+
       model: 'gpt-4',
       max_tokens: 150,
       temperature: 0.7,
       messages: [
-        { role: 'system', content: gptPrompt },
-        { role: 'user', content: question }
-      ]
+  { role: 'system', content: gptPrompt },
+  leads.messages.push({ role: 'assistant', content: gptResponse });
+
+]
+
     });
 
-    gptResponse = chat.choices[0].message.content;
+  gptResponse = chat.choices[0].message.content.trim();
+if (!leads.messages) leads.messages = [];
+leads.messages.push({ role: 'user', content: question });
 
-    if (gptResponse.toLowerCase().includes("i'm not sure") || gptResponse.length < 20) {
-      const kbAnswer = await answerFromKnowledgeBase(question);
-      if (kbAnswer && !kbAnswer.includes("you may want to ask an agent")) {
-        gptResponse = kbAnswer;
-      }
-    }
-  }
+const endings = [
+  "💬 How else can I assist you today?",
+  "🙏 Feel free to ask anything else!",
+  "📘 Would you like to know something more?",
+  "🤖 I'm here to help. What’s next?"
+];
 
-  return res.json({ message: gptResponse });
+const randomEnding = endings[Math.floor(Math.random() * endings.length)];
+
+if (
+  !gptResponse.toLowerCase().includes("how else can i help") &&
+  !gptResponse.toLowerCase().includes("what else can i do for you")
+) {
+  gptResponse += `\n\n${randomEnding}`;
+}
+
+return res.json({
+  messages: [
+    { type: 'bot', content: gptResponse }
+  ]
 });
+
+ 
 
 app.post('/calendly-booked', (req, res) => {
   const { sessionId } = req.body;

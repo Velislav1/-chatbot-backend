@@ -95,8 +95,8 @@ loadKnowledgeBase();
 
 async function loadKnowledgeBase() {
   try {
-    const file1 = fs.readFileSync('./documents for base/first.pdf');
-    const file2 = fs.readFileSync('./documents for base/second.pdf');
+    const file1 = fs.readFileSync('./documents_for_base/first.pdf');
+    const file2 = fs.readFileSync('./documents_for_base/second.pdf');
     const data1 = await pdfParse(file1);
     const data2 = await pdfParse(file2);
     knowledgeBase = data1.text + '\n\n' + data2.text;

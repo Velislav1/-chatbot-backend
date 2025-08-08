@@ -160,10 +160,6 @@ async function loadKnowledgeBase() {
 loadKnowledgeBase();
 
 async function answerFromKnowledgeBase(question, fullName, email, phone, dynamicKnowledge = '') {
-  if (fullName && email && phone) {
-    return "✅ Thank you! You're all set. A licensed agent will contact you soon. You can also book a meeting or ask more questions here.\n\n💬 How else can I help you today?";
-  }
-
   const gptPrompt = `
 You are Prime, a smart and friendly virtual insurance agent.
 Your job is to help users, collect their contact info (full name, email, phone, type of insurance), and answer questions clearly.
@@ -173,21 +169,25 @@ Always thank the user after each message.
 Only ask one question at a time.
 If the user already gave some info, don't ask again.
 
-
 If you don't know something, politely say so.
-When answering, be kind and professional  like a real insurance expert.
+When answering, be kind and professional like a real insurance expert.
 
 Always end your response with:
 💬 How else can I help you today?
 
 Keep responses under 2 or 3 sentences.
 
-Knowledge Base:
-${dynamicKnowledgeBase || knowledgeBase}
+User Info:
+- Name: ${fullName || "Not provided"}
+- Email: ${email || "Not provided"}
+- Phone: ${phone || "Not provided"}
 
+Knowledge Base:
+${dynamicKnowledge || knowledgeBase}
 
 Question: ${question}
-Answer:`;
+Answer:
+`;
 
   const response = await openai.chat.completions.create({
     model: 'gpt-4',
@@ -196,6 +196,7 @@ Answer:`;
 
   return `${response.choices[0].message.content.trim()}\n\n🙏 Thank you for your question! 💬 How else can I help you today?`;
 }
+
 
 
 app.post('/chat', async (req, res) => {

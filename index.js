@@ -199,7 +199,8 @@ Answer:`;
 
 
 app.post('/chat', async (req, res) => {
-  const { q: question, sessionId } = req.body;
+  const { question, sessionId } = req.body;
+
 
   if (!question || !sessionId) {
     return res.status(400).json({

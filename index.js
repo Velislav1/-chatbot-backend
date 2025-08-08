@@ -95,6 +95,11 @@ loadKnowledgeBase();
 
 async function loadKnowledgeBase() {
   try {
+  if (!fs.existsSync('./documents_for_base')) {
+  console.error('❌ Folder documents_for_base does not exist!');
+  return;
+}
+
     const file1 = fs.readFileSync('./documents_for_base/first.pdf');
     const file2 = fs.readFileSync('./documents_for_base/second.pdf');
     const data1 = await pdfParse(file1);

@@ -1,4 +1,5 @@
 require('dotenv').config();
+const { createWorker } = require('tesseract.js'); 
 const mongoose = require('mongoose');
 const Lead = require('./Lead');
 const multer = require('multer');
@@ -14,6 +15,7 @@ const fs = require('fs');
 const MAKE_WEBHOOK_URL = 'https://hook.eu2.make.com/ctytwgql3xuidx21h1d2tz8uy49gvvd6';
 const CALENDLY_LINK = 'https://calendly.com/viliokaized';
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
 let uploadedPdfText = '';
 let knowledgeBase = '';
 
@@ -21,25 +23,63 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+
 mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log('✅ MongoDB connected'))
-  .catch(err => console.error('❌ MongoDB connection error:', err));
+  .then(() => {
+    console.log('✅ MongoDB connected');
+  })
+  .catch((err) => {
+    console.error('❌ MongoDB connection error:', err.message);
+    process.exit(1); // ⛔️ Спира приложението при фатална грешка
+  });
 
 
 console.log('MONGODB_URI:', process.env.MONGODB_URI);
 
-// Upload PDF and parse text
-app.post('/upload-pdf', upload.single('pdf'), async (req, res) => {
+
+
+
+
+
+app.post('/upload-pdf', upload.single('file'), async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-    const data = await pdfParse(req.file.buffer);
-    uploadedPdfText = data.text;
-    res.json({ message: '✅ PDF uploaded and processed successfully.' });
+    const { sessionId } = req.body;
+    if (!req.file || !sessionId || !sessionStore[sessionId]) {
+      return res.status(400).json({ error: 'Missing file or sessionId' });
+    }
+
+    const mimeType = req.file.mimetype;
+
+    if (mimeType === 'application/pdf') {
+      const data = await pdfParse(req.file.buffer);
+      sessionStore[sessionId].dynamicKnowledgeBase += '\n\n' + data.text;
+
+      return res.json({
+        message: '✅ File uploaded and processed successfully. 💬 How can I help you now? You can ask a question about the document.'
+      });
+    }
+
+    if (mimeType.startsWith('image/')) {
+      const worker = await createWorker('eng');
+      const { data: { text } } = await worker.recognize(req.file.buffer);
+      await worker.terminate();
+      sessionStore[sessionId].dynamicKnowledgeBase += '\n\n' + text;
+
+      return res.json({
+        message: '✅ Screenshot uploaded and processed successfully. 💬 How can I help you now?'
+      });
+    }
+
+    return res.status(400).json({ error: 'Unsupported file type' });
   } catch (err) {
-    console.error('❌ Error parsing PDF:', err);
-    res.status(500).json({ error: 'Failed to process PDF' });
+    console.error('❌ Error processing file:', err);
+    res.status(500).json({ error: 'Failed to process file' });
   }
 });
+
+
+
+
 
 function extractLeadData(message, leads) {
   const emailMatch = message.match(/\b[\w.-]+@[\w.-]+\.\w+\b/);
@@ -48,7 +88,13 @@ function extractLeadData(message, leads) {
 
   if (emailMatch && !leads.email) leads.email = emailMatch[0];
   if (phoneMatch && !leads.phone) leads.phone = phoneMatch[0];
-  if (nameMatch && !leads.name) leads.name = nameMatch[1].trim();
+  if (nameMatch && !leads.name) {
+    const name = nameMatch[1].trim();
+    leads.name = name
+      .split(' ')
+      .map(word => word[0].toUpperCase() + word.slice(1))
+      .join(' ');
+  }
 
   const insuranceTypes = ['auto', 'health', 'life', 'home', 'commercial'];
   for (let type of insuranceTypes) {
@@ -88,36 +134,36 @@ async function sendLeadsToMake(leads) {
     console.error('❌ Failed to send lead:', error.message);
   }
 }
-
-loadKnowledgeBase();
-
 async function loadKnowledgeBase() {
   try {
-  if (!fs.existsSync('./documents_for_base')) {
-  console.error('❌ Folder documents_for_base does not exist!');
-  return;
-}
+    const file1Exists = fs.existsSync('./documents_for_base/first1.pdf');
+    const file2Exists = fs.existsSync('./documents_for_base/second2.pdf');
+
+    if (!file1Exists || !file2Exists) {
+      console.error('❌ One or both PDF files are missing!');
+      return;
+    }
 
     const file1 = fs.readFileSync('./documents_for_base/first1.pdf');
     const file2 = fs.readFileSync('./documents_for_base/second2.pdf');
+
     const data1 = await pdfParse(file1);
     const data2 = await pdfParse(file2);
-    knowledgeBase = data1.text + '\n\n' + data2.text;
+
+    knowledgeBase = `${data1.text}\n\n${data2.text}`;
     console.log('✅ Knowledge base loaded');
   } catch (err) {
     console.error('❌ Error loading PDFs:', err);
   }
 }
 
+loadKnowledgeBase();
 
-
-async function answerFromKnowledgeBase(question, fullName, email, phone) {
-  // 🔒 Ако вече имаме всичко – не викай GPT, върни завършен отговор
+async function answerFromKnowledgeBase(question, fullName, email, phone, dynamicKnowledge = '') {
   if (fullName && email && phone) {
     return "✅ Thank you! You're all set. A licensed agent will contact you soon. You can also book a meeting or ask more questions here.\n\n💬 How else can I help you today?";
   }
 
-  // 🧠 Стандартна GPT логика, ако липсват данни
   const gptPrompt = `
 You are Prime, a smart and friendly virtual insurance agent.
 Your job is to help users, collect their contact info (full name, email, phone, type of insurance), and answer questions clearly.
@@ -125,54 +171,57 @@ Your job is to help users, collect their contact info (full name, email, phone, 
 Speak like a real human: short sentences, warm tone, not robotic.
 Always thank the user after each message.
 Only ask one question at a time.
-If the user already gave some info, don’t ask again.
+If the user already gave some info, don't ask again.
 
-If you don’t know something, politely say so.
-When answering, be kind and professional – like a real insurance expert.
+
+If you don't know something, politely say so.
+When answering, be kind and professional  like a real insurance expert.
 
 Always end your response with:
 💬 How else can I help you today?
 
-Keep responses under 2–3 sentences.
+Keep responses under 2 or 3 sentences.
 
 Knowledge Base:
-${knowledgeBase}
+${dynamicKnowledgeBase || knowledgeBase}
+
 
 Question: ${question}
 Answer:`;
 
-
   const response = await openai.chat.completions.create({
     model: 'gpt-4',
-    messages: [{ role: 'system', content: prompt }]
+    messages: [{ role: 'system', content: gptPrompt }]
   });
 
-  // ✅ Добавяме благодарност + follow-up
   return `${response.choices[0].message.content.trim()}\n\n🙏 Thank you for your question! 💬 How else can I help you today?`;
 }
+
+
 app.post('/chat', async (req, res) => {
   const { q: question, sessionId } = req.body;
 
-  if (!question || !sessionId)
-    return res.status(400).json({ messages: [{ type: 'bot', content: "❌ Missing question or sessionId" }] });
-
-  if (!sessionStore[sessionId]) {
-    sessionStore[sessionId] = {
-      step: 'collect_name',
-      booked: false,
-      messages: [],
-      data: {
-        name: '',
-        email: '',
-        phone: '',
-        type: ''
-      }
-    };
+  if (!question || !sessionId) {
+    return res.status(400).json({
+      messages: [{ type: 'bot', content: "❌ Missing question or sessionId" }]
+    });
   }
+
+if (!sessionStore[sessionId]) {
+  sessionStore[sessionId] = {
+    step: 'collect_name',
+    booked: false,
+    messages: [],
+    dynamicKnowledgeBase: '',
+    data: { name: '', email: '', phone: '', type: '' }
+  };
+}
+
+
+
 
   const leads = sessionStore[sessionId];
 
-  // ✅ Booking confirmed
   if (leads.booked) {
     delete leads.booked;
     return res.json({
@@ -191,21 +240,17 @@ app.post('/chat', async (req, res) => {
   const missingField = getNextMissingField(leads.data);
 
   if (!missingField) {
-    const answer = await answerFromKnowledgeBase(
-      question,
-      leads.data.name,
-      leads.data.email,
-      leads.data.phone
-    );
+  const answer = await answerFromKnowledgeBase(
+    question,
+    leads.data.name,
+    leads.data.email,
+    leads.data.phone,
+    leads.dynamicKnowledgeBase
+  );
 
-    return res.json({
-      messages: [
-        { type: 'bot', content: answer }
-      ]
-    });
+    return res.json({ messages: [{ type: 'bot', content: answer }] });
   }
 
-  // 📅 Booking intent
   if (/book|meeting|schedule|appointment/i.test(question.toLowerCase())) {
     return res.json({
       messages: [
@@ -229,19 +274,25 @@ app.post('/chat', async (req, res) => {
       console.log('✅ Lead saved to MongoDB');
     } catch (err) {
       return res.json({
-        messages: [
-          { type: 'bot', content: '❌ Error sending to Make: ' + err.message }
-        ]
+        messages: [{ type: 'bot', content: '❌ Error sending to Make: ' + err.message }]
       });
     }
   }
 
   let gptResponse = '';
 
-  if (leads.sent && !needsMoreInfo(leads.data)) {
-    const kbAnswer = await answerFromKnowledgeBase(question);
-    gptResponse = kbAnswer || "✅ You're all set! Feel free to ask more questions.";
-  } else if (!leads.sent && needsMoreInfo(leads.data)) {
+ if (leads.sent && !needsMoreInfo(leads.data)) {
+  const kbAnswer = await answerFromKnowledgeBase(
+    question,
+    leads.data.name,
+    leads.data.email,
+    leads.data.phone,
+    leads.dynamicKnowledgeBase
+  );
+  gptResponse = kbAnswer || "✅ You're all set! Feel free to ask more questions.";
+}
+
+  else if (!leads.sent && needsMoreInfo(leads.data)) {
     const missingField = getNextMissingField(leads.data);
     leads.lastAsked = missingField;
     gptResponse = getFieldQuestion(missingField);
@@ -281,23 +332,20 @@ app.post('/chat', async (req, res) => {
   leads.messages.push({ role: 'assistant', content: gptResponse });
 
   return res.json({
-    messages: [
-      { type: 'bot', content: gptResponse }
-    ]
+    messages: [{ type: 'bot', content: gptResponse }]
   });
 });
 
-
-
-  
+// Calendly booking confirmation
 app.post('/calendly-booked', (req, res) => {
-
   const { sessionId } = req.body;
+
   if (sessionId && sessionStore[sessionId]) {
     sessionStore[sessionId].booked = true;
     console.log(`✅ Booking confirmed for session: ${sessionId}`);
     return res.status(200).json({ message: 'Booking saved in session.' });
   }
+
   res.status(400).json({ message: 'Missing or invalid sessionId.' });
 });
 
